@@ -37,6 +37,7 @@ def main():
     parser.add_argument("experiment_name")
     parser.add_argument("-d", action='store_true', default=False)
     parser.add_argument("-gen", action='store_true', default=False)
+    parser.add_argument("-e", action='store_true', default=False)
     arguments = parser.parse_args()
 
     full_name = arguments.experiment_name.split('/')
@@ -44,6 +45,7 @@ def main():
     experiment_name = full_name.pop()
     experiment_group = full_name.pop() if len(full_name) > 0 else ''
 
+    external_dataset = arguments.e
     debug_mode = arguments.d
     generate_data = arguments.gen
 

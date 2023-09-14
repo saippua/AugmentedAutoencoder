@@ -18,7 +18,7 @@ def load_meshes_sixd( obj_files, vertex_tmp_store_folder , recalculate_normals=F
     from . import inout
     hashed_file_name = hashlib.md5( (''.join(obj_files) + 'load_meshes_sixd' + str(recalculate_normals)).encode("utf-8")).hexdigest() + '.npy'
 
-    out_file = os.path.join( vertex_tmp_store_folder, hashed_file_name)
+    out_file = os.path.join( vertex_tmp_store_folder, 'meshes_' + hashed_file_name)
     if os.path.exists(out_file):
         return np.load(out_file, allow_pickle=True)
     else:
@@ -34,9 +34,19 @@ def load_meshes_sixd( obj_files, vertex_tmp_store_folder , recalculate_normals=F
             faces = np.array(model['faces']).astype(np.uint32)
             if 'colors' in model:
                 colors = np.array(model['colors']).astype(np.uint32)
-                attributes.append( (vertices, normals, colors, faces) )
+                if 'texture_uv' in model:
+                    uvs = np.array(model['texture_uv']).astype(np.float32)
+                    attributes.append( (vertices, normals, colors, faces, uvs) )
+                else:
+                    attributes.append( (vertices, normals, colors, faces) )
             else:
-                attributes.append( (vertices, normals, faces) )
+                if 'texture_uv' in model:
+                    uvs = np.array(model['texture_uv']).astype(np.float32)
+                    attributes.append( (vertices, normals, uvs, faces) )
+                else:
+                    attributes.append( (vertices, normals, faces) )
+
+
         np.save(out_file, attributes)
         return attributes
 

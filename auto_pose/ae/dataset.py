@@ -59,7 +59,7 @@ class Dataset(object):
 
     @lazy_property
     def renderer(self):
-        from auto_pose.meshrenderer import meshrenderer, meshrenderer_phong
+        from auto_pose.meshrenderer import meshrenderer, meshrenderer_phong, meshrenderer_custom
         if self._kw['model'] == 'cad':
             renderer = meshrenderer.Renderer(
                [self._kw['model_path']],
@@ -74,6 +74,13 @@ class Dataset(object):
                self.dataset_path,
                float(self._kw['vertex_scale'])
             )
+        elif self._kw['model'] == 'custom':
+            renderer = meshrenderer_custom.Renderer(
+               [self._kw['model_path']],
+               int(self._kw['antialiasing']),
+               self.dataset_path,
+               float(self._kw['vertex_scale'])
+            )
         else:
             'Error: neither cad nor reconst in model path!'
             exit()
@@ -81,7 +88,7 @@ class Dataset(object):
 
     def get_training_images(self, dataset_path, args):
         current_config_hash = hashlib.md5((str(args.items('Dataset')+args.items('Paths'))).encode('utf-8')).hexdigest()
-        current_file_name = os.path.join(dataset_path, current_config_hash + '.npz')
+        current_file_name = os.path.join(dataset_path, 'training_imgs_' + current_config_hash + '.npz')
 
         if os.path.exists(current_file_name):
             training_data = np.load(current_file_name)
@@ -145,7 +152,7 @@ class Dataset(object):
 
     def load_bg_images(self, dataset_path):
         current_config_hash = hashlib.md5((str(self.shape) + str(self.noof_bg_imgs) + str(self._kw['background_images_glob'])).encode('utf-8')).hexdigest()
-        current_file_name = os.path.join(dataset_path, current_config_hash +'.npy')
+        current_file_name = os.path.join(dataset_path, 'bg_images_' + current_config_hash +'.npy')
         if os.path.exists(current_file_name):
             self.bg_imgs = np.load(current_file_name)
         else:

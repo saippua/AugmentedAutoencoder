@@ -75,7 +75,7 @@ def load_ply(path):
         model['colors'] = np.zeros((n_pts, 3), np.float)
 
     is_texture = False
-    if {'texture_u', 'texture_v'}.issubset(set(pt_props_names)):
+    if {'s', 't'}.issubset(set(pt_props_names)):
         is_texture = True
         model['texture_uv'] = np.zeros((n_pts, 2), np.float)
 
@@ -90,7 +90,7 @@ def load_ply(path):
     for pt_id in range(n_pts):
         prop_vals = {}
         load_props = ['x', 'y', 'z', 'nx', 'ny', 'nz',
-                      'red', 'green', 'blue', 'texture_u', 'texture_v']
+                      'red', 'green', 'blue', 's', 't']
         if is_binary:
             for prop in pt_props:
                 format = formats[prop[1]]
@@ -118,8 +118,8 @@ def load_ply(path):
             model['colors'][pt_id, 2] = float(prop_vals['blue'])
 
         if is_texture:
-            model['texture_uv'][pt_id, 0] = float(prop_vals['texture_u'])
-            model['texture_uv'][pt_id, 1] = float(prop_vals['texture_v'])
+            model['texture_uv'][pt_id, 0] = float(prop_vals['s'])
+            model['texture_uv'][pt_id, 1] = 1-float(prop_vals['t'])
 
     # Load faces
     for face_id in range(n_faces):

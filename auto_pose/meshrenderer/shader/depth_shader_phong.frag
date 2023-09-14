@@ -7,6 +7,8 @@ in vec3 ViewDir;
 in vec3 v_L;
 in vec3 v_normal;
 
+in vec2 uv;
+
 layout (location = 0) uniform float u_light_ambient_w;
 layout (location = 2) uniform float u_light_diffuse_w;
 layout (location = 3) uniform float u_light_specular_w;
@@ -15,16 +17,21 @@ layout (location = 0) out vec3 rgb;
 layout (location = 1) out float depth;
 layout (location = 2) out vec3 rgb_normals;
 
+uniform sampler2D myTextureSampler;
+
 void main(void) {
+
+    int p = 5;
+    vec3 ao = texture(myTextureSampler, uv).rgb;
+    ao = pow(ao, vec3(p,p,p));
 
     vec3 Normal = normalize(v_normal);
     vec3 LightDir = normalize(v_L);
     vec3 ViewDir = normalize(v_view);
 
-    vec3 diffuse = max(dot(Normal, LightDir), 0.0) * v_color;
+    vec3 diffuse = max(dot(Normal, LightDir), 0.0) * (v_color*ao);
     vec3 R = reflect(-LightDir, Normal);
-    vec3 specular = max(dot(R, ViewDir), 0.0) * v_color;
-
+    vec3 specular = max(dot(R, ViewDir), 0.0) * (v_color*ao);
 
     rgb = vec3(u_light_ambient_w  * v_color + 
                u_light_diffuse_w  * diffuse +
@@ -35,6 +42,7 @@ void main(void) {
     if(rgb.z > 1.0) rgb.z = 1.0;
     rgb_normals = vec3(Normal * 0.5 + 0.5); // transforms from [-1,1] to [0,1]  
     depth = v_view.z;
+
 }
 
 /* vec3 rgb2hsv(vec3 c) {
