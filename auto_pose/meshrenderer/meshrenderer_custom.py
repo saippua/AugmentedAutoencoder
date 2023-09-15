@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import numpy as np
+import random
 
 from PIL import Image
 
@@ -58,7 +59,7 @@ class Renderer(object):
                 vertex, normal, faces = attribute 
 
             if color is None:
-                color = np.ones(vertex.shape, dtype=vertex.dtype)*160.0
+                color = np.ones(vertex.shape, dtype=vertex.dtype) * np.array([165,160,145])
             if uv is None:
                 uv = np.zeros((vertex.shape[0], 2))
 
@@ -91,13 +92,26 @@ class Renderer(object):
         # if clamp:
         #     shader = gu.Shader('depth_shader_phong.vs', 'depth_shader_phong_clamped.frag')
         # else:
-        shader = gu.Shader('depth_shader_phong.vs', 'depth_shader_phong.frag')
+        shader = gu.Shader('depth_shader_texture.vs', 'depth_shader_texture.frag')
         shader.compile_and_use()
 
         self._scene_buffer = gu.ShaderStorage(0, gu.Camera().data , True)
         self._scene_buffer.bind()
 
-        self.texture_ao = self.read_texture("/home/localadmin/Data/pallet/Pallet_AO.png")
+        textures = [
+                "/home/localadmin/Data/pallet/Pallet_AO.png",
+                "/home/localadmin/Data/pallet/Textures/OVL_white.jpg",
+                "/home/localadmin/Data/pallet/Textures/OVL_wood1_strong.jpg",
+                "/home/localadmin/Data/pallet/Textures/OVL_wood2_strong.jpg",
+                "/home/localadmin/Data/pallet/Textures/OVL_wood3_strong.jpg",
+                "/home/localadmin/Data/pallet/Textures/OVL_wood4_strong.jpg",
+                ]
+
+        self.ids = glGenTextures(len(textures))
+        self.read_texture_ao(self.ids[0], textures[0])
+        self.ovl_imgs = self.load_ovl(textures[1:])
+        self.texture_ao = self.ids[0]
+        
 
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_TEXTURE_2D)
@@ -115,23 +129,43 @@ class Renderer(object):
     def set_specular_light(self, a):
         glUniform1f(3, a)
 
-    def read_texture(self, filename):
+    def set_texture_offset(self, o):
+        glUniform2f(4, o[0], o[1])
+
+    def read_texture_ao(self, id, filename):
         img = Image.open(filename)
         img = img.convert("RGB")
-        # img.show()
         img_data = np.array(list(img.getdata()), np.int8)
-        textID = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, textID)
+
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, id)
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img.size[0], img.size[1], 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
-        return textID
+
+        return id
+
+    def load_ovl(self, filenames):
+        imgs = []
+        for filename in filenames:
+            img = Image.open(filename)
+            img = img.convert("RGB")
+            img_data = np.array(list(img.getdata()), np.int8)
+            imgs.append((img, img_data))
+        return imgs
+
+    def bind_ovl(self, id, size, data):
+        glActiveTexture(GL_TEXTURE1)
+        glBindTexture(GL_TEXTURE_2D, id)
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size[0], size[1], 0, GL_RGB, GL_UNSIGNED_BYTE, data)
 
     def render(self, obj_id, W, H, K, R, t, near, far, random_light=False, phong={'ambient':0.4,'diffuse':0.8, 'specular':0.3}):
         assert W <= Renderer.MAX_FBO_WIDTH and H <= Renderer.MAX_FBO_HEIGHT
@@ -152,26 +186,22 @@ class Renderer(object):
         self._scene_buffer.update(camera.data)
         # print phong
         if random_light:
+            ovl_index = random.randint(1, 4)
+            self.bind_ovl(self.ids[1], self.ovl_imgs[ovl_index][0].size, self.ovl_imgs[ovl_index][1])
             self.set_light_pose( 1000.*np.random.random(3) )
             self.set_ambient_light(phong['ambient'])
             self.set_diffuse_light(phong['diffuse'] + 0.1*(2*np.random.rand()-1))
             self.set_specular_light(phong['specular'] + 0.1*(2*np.random.rand()-1))
-            # self.set_ambient_light(phong['ambient'])
-            # self.set_diffuse_light(0.7)
-            # self.set_specular_light(0.3)
         else:
+            ovl_index = 0
+            # self.bind_ovl(self.ids[1], (1024,1024), np.ones((1024,1024, 3), dtype=np.int8))
+            self.bind_ovl(self.ids[1], self.ovl_imgs[ovl_index][0].size, self.ovl_imgs[ovl_index][1])
             self.set_light_pose( np.array([400., 400., 400]) )
             self.set_ambient_light(phong['ambient'])
             self.set_diffuse_light(phong['diffuse'])
             self.set_specular_light(phong['specular'])
 
-
-        # self.set_ambient_light(0.4)
-        # self.set_diffuse_light(0.7)
-
-        # self.set_ambient_light(0.5)
-        # self.set_diffuse_light(0.4)
-        # self.set_specular_light(0.1)
+        self.set_texture_offset(np.random.rand(2))
 
         glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, ctypes.c_void_p(obj_id*4*5))
 
@@ -204,60 +234,61 @@ class Renderer(object):
 
         return bgr, depth
 
-    def render_many(self, obj_ids, W, H, K, Rs, ts, near, far, random_light=True, phong={'ambient':0.4,'diffuse':0.8, 'specular':0.3}):
-        assert W <= Renderer.MAX_FBO_WIDTH and H <= Renderer.MAX_FBO_HEIGHT
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glViewport(0, 0, W, H)
-
-        if random_light:
-            self.set_light_pose( 1000.*np.random.random(3) )
-            self.set_ambient_light(phong['ambient'] + 0.1*(2*np.random.rand()-1))
-            self.set_diffuse_light(phong['diffuse'] + 0.1*(2*np.random.rand()-1))
-            self.set_specular_light(phong['specular'] + 0.1*(2*np.random.rand()-1))
-            # self.set_ambient_light(phong['ambient'])
-            # self.set_diffuse_light(0.7)
-            # self.set_specular_light(0.3)
-        else:
-            self.set_light_pose( np.array([400., 400., 400]) )
-            self.set_ambient_light(phong['ambient'])
-            self.set_diffuse_light(phong['diffuse'])
-            self.set_specular_light(phong['specular'])
-
-        bbs = []
-        for i in range(len(obj_ids)):
-            o = obj_ids[i]
-            R = Rs[i]
-            t = ts[i]
-            camera = gu.Camera()
-            camera.realCamera(W, H, K, R, t, near, far)
-            self._scene_buffer.update(camera.data)
-
-            self._fbo.bind()
-            glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, ctypes.c_void_p(o*4*5))
-
-            self._fbo_depth.bind()
-            glViewport(0, 0, W, H)
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-            glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, ctypes.c_void_p(o*4*5))
-
-            glNamedFramebufferReadBuffer(self._fbo_depth.id, GL_COLOR_ATTACHMENT1)
-            depth_flipped = glReadPixels(0, 0, W, H, GL_RED, GL_FLOAT).reshape(H,W)
-            depth = np.flipud(depth_flipped).copy()
-
-            ys, xs = np.nonzero(depth > 0)
-            obj_bb = misc.calc_2d_bbox(xs, ys, (W,H))
-            bbs.append(obj_bb)
-
-        glBindFramebuffer(GL_FRAMEBUFFER, self._fbo.id)
-        glNamedFramebufferReadBuffer(self._fbo.id, GL_COLOR_ATTACHMENT0)
-        bgr_flipped = np.frombuffer( glReadPixels(0, 0, W, H, GL_BGR, GL_UNSIGNED_BYTE), dtype=np.uint8 ).reshape(H,W,3)
-        bgr = np.flipud(bgr_flipped).copy()
-
-        glNamedFramebufferReadBuffer(self._fbo.id, GL_COLOR_ATTACHMENT1)
-        depth_flipped = glReadPixels(0, 0, W, H, GL_RED, GL_FLOAT).reshape(H,W)
-        depth = np.flipud(depth_flipped).copy()
-
-        return bgr, depth, bbs
+    # def render_many(self, obj_ids, W, H, K, Rs, ts, near, far, random_light=True, phong={'ambient':0.4,'diffuse':0.8, 'specular':0.3}):
+    #     assert W <= Renderer.MAX_FBO_WIDTH and H <= Renderer.MAX_FBO_HEIGHT
+    #
+    #     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    #     glViewport(0, 0, W, H)
+    #
+    #     if random_light:
+    #         self.set_light_pose( 1000.*np.random.random(3) )
+    #         self.set_ambient_light(phong['ambient'] + 0.1*(2*np.random.rand()-1))
+    #         self.set_diffuse_light(phong['diffuse'] + 0.1*(2*np.random.rand()-1))
+    #         self.set_specular_light(phong['specular'] + 0.1*(2*np.random.rand()-1))
+    #         # self.set_ambient_light(phong['ambient'])
+    #         # self.set_diffuse_light(0.7)
+    #         # self.set_specular_light(0.3)
+    #     else:
+    #         self.set_light_pose( np.array([400., 400., 400]) )
+    #         self.set_ambient_light(phong['ambient'])
+    #         self.set_diffuse_light(phong['diffuse'])
+    #         self.set_specular_light(phong['specular'])
+    #
+    #
+    #     bbs = []
+    #     for i in range(len(obj_ids)):
+    #         o = obj_ids[i]
+    #         R = Rs[i]
+    #         t = ts[i]
+    #         camera = gu.Camera()
+    #         camera.realCamera(W, H, K, R, t, near, far)
+    #         self._scene_buffer.update(camera.data)
+    #
+    #         self._fbo.bind()
+    #         glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, ctypes.c_void_p(o*4*5))
+    #
+    #         self._fbo_depth.bind()
+    #         glViewport(0, 0, W, H)
+    #         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    #         glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, ctypes.c_void_p(o*4*5))
+    #
+    #         glNamedFramebufferReadBuffer(self._fbo_depth.id, GL_COLOR_ATTACHMENT1)
+    #         depth_flipped = glReadPixels(0, 0, W, H, GL_RED, GL_FLOAT).reshape(H,W)
+    #         depth = np.flipud(depth_flipped).copy()
+    #
+    #         ys, xs = np.nonzero(depth > 0)
+    #         obj_bb = misc.calc_2d_bbox(xs, ys, (W,H))
+    #         bbs.append(obj_bb)
+    #
+    #     glBindFramebuffer(GL_FRAMEBUFFER, self._fbo.id)
+    #     glNamedFramebufferReadBuffer(self._fbo.id, GL_COLOR_ATTACHMENT0)
+    #     bgr_flipped = np.frombuffer( glReadPixels(0, 0, W, H, GL_BGR, GL_UNSIGNED_BYTE), dtype=np.uint8 ).reshape(H,W,3)
+    #     bgr = np.flipud(bgr_flipped).copy()
+    #
+    #     glNamedFramebufferReadBuffer(self._fbo.id, GL_COLOR_ATTACHMENT1)
+    #     depth_flipped = glReadPixels(0, 0, W, H, GL_RED, GL_FLOAT).reshape(H,W)
+    #     depth = np.flipud(depth_flipped).copy()
+    #
+    #     return bgr, depth, bbs
     def close(self):
         self._context.close()

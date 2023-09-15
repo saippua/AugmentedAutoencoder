@@ -43,11 +43,20 @@ class Renderer(object):
         vertices = []
         indices = []
         for attribute in attributes:
-            if len(attribute) ==4:
-                vertex, normal, color, faces = attribute
+            color = None
+            if len(attribute) == 5:
+                vertex, normal, color, faces, _ = attribute
+            elif len(attribute) == 4:
+                if attribute[2].dtype == np.float32:
+                    vertex, normal, _, faces = attribute
+                else:
+                    vertex, normal, color, faces = attribute
             else:
                 vertex, normal, faces = attribute 
-                color = np.ones_like(vertex)*160.0
+
+            if color is None:
+                color = np.ones(vertex.shape, dtype=vertex.dtype)*160.0
+
             indices.append( faces.flatten() )
             vertices.append(np.hstack((vertex * vertex_scale, normal, color/255.0)).flatten())
 
